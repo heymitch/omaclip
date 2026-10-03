@@ -198,6 +198,10 @@ bar widget ◀─ status.json│
 anyone ◀──────────────── https://clips.example.com/<id>/ ◀────── Caddy (HTTPS, static files)
 ```
 
+## Roadmap
+
+Transcripts, captions and smart titles from open models on your VPS are next; see [ROADMAP.md](ROADMAP.md).
+
 ## Developing
 
 The bar widget is `Panel.qml`; the command is `bin/omaclip`; the server is
