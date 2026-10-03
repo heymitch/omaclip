@@ -25,6 +25,8 @@ Panel {
   property var recent: []
   property string testResult: ""
   property bool testing: false
+  // Match the opacity Hyprland gives the user's terminals; only the card goes see-through, not the text.
+  property real panelAlpha: 1
 
   readonly property bool isRecording: status === "recording"
   readonly property bool busy: status === "countdown" || status === "uploading"
@@ -51,7 +53,7 @@ Panel {
   function refreshConfig() { configProc.running = true }
   function refreshRecent() { recentProc.running = true }
 
-  onOpenedChanged: if (opened) { refreshConfig(); refreshRecent(); testResult = "" }
+  onOpenedChanged: if (opened) { refreshConfig(); refreshRecent(); opacityProc.running = true; testResult = "" }
 
   // ---------- data ----------
 
@@ -98,6 +100,18 @@ Panel {
     running: true
     stdout: StdioCollector {
       onStreamFinished: { try { root.recent = JSON.parse(text) } catch (e) { root.recent = [] } }
+    }
+  }
+
+  Process {
+    id: opacityProc
+    command: [root.omaclip, "terminal-opacity"]
+    running: true
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var a = parseFloat(text)
+        if (!isNaN(a)) root.panelAlpha = Math.max(0.3, Math.min(1, a))
+      }
     }
   }
 
@@ -263,6 +277,17 @@ Panel {
     Column {
       id: column
       width: parent.width
+
+      // KeyboardPanel paints its card in the theme's popup color with no override,
+      // so find the card above us and bind its color to the same hue at panelAlpha.
+      Component.onCompleted: {
+        var card = column.parent
+        while (card && card.borderSpec === undefined) card = card.parent
+        if (card) card.color = Qt.binding(function() {
+          var c = Color.popups.background
+          return Qt.rgba(c.r, c.g, c.b, c.a * root.panelAlpha)
+        })
+      }
       spacing: Style.spacing.md
       padding: Style.spacing.panelPadding
       readonly property real inner: width - Style.spacing.panelPadding * 2
@@ -364,7 +389,7 @@ Panel {
       Toggle { width: column.inner; label: "Camera bubble"; checked: root.config.camera === true; onClicked: root.setConfig("camera", !checked) }
       Toggle { width: column.inner; label: "Mirror camera"; checked: root.config.cameraMirror === true; onClicked: root.setConfig("cameraMirror", !checked) }
       Toggle { width: column.inner; label: "Microphone"; checked: root.config.mic === true; onClicked: root.setConfig("mic", !checked) }
-      Toggle { width: column.inner; label: "Computer audio"; checked: root.config.desktopAudio === true; onClicked: root.setConfig("desktopAudio", !checked) }
+      Toggle { width: column.inner; label: "System audio"; checked: root.config.systemAudio === true; onClicked: root.setConfig("systemAudio", !checked) }
       Toggle { width: column.inner; label: "3-2-1 countdown with mic check"; checked: root.config.countdown === true; onClicked: root.setConfig("countdown", !checked) }
 
       Row {

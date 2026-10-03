@@ -11,7 +11,8 @@ or oEmbed.
 
 The bar icon is a little screen with your camera bubble in its corner. During the countdown
 the bubble fills in three steps; while you record it turns red and fills one lap per minute
-(hover for the exact time). The icon's panel holds your recent links and every setting.
+(hover for the exact time). The icon's panel holds your recent links and every setting, and
+its background matches the opacity Hyprland gives your terminals (the text stays solid).
 
 Tip: Omarchy's own screen-recording indicator shows up too while you record. To keep the bar
 tidy, untick **Screen recording** in the Indicators widget's settings, or run:
@@ -134,7 +135,7 @@ Settings (panel or `omaclip config set <key> <value>`):
 | `cameraDevice` | first webcam | e.g. `/dev/video2` |
 | `cameraMirror` | `true` | Flip the bubble like a mirror (the recording is flipped too) |
 | `mic` | `true` | Record your microphone |
-| `desktopAudio` | `true` | Record computer sound |
+| `systemAudio` | `true` | Record system audio (what your computer plays) |
 | `countdown` | `true` | 3-2-1 with mic level before recording |
 | `server` | | Your clip site, e.g. `https://clips.example.com` |
 | `uploadUrl` | `<server>/api/upload` | Only set this for a Tailscale address |

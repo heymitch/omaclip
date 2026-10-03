@@ -33,7 +33,7 @@ DEFAULTS='{
   "cameraCorner": "bottom-left",
   "cameraMirror": true,
   "mic": true,
-  "desktopAudio": true,
+  "systemAudio": true,
   "countdown": true
 }'
 
@@ -54,7 +54,7 @@ upload_url() {
 config_set() {
   local key=$1 value=${2-} json
   case $key in
-  camera | cameraMirror | mic | desktopAudio | countdown)
+  camera | cameraMirror | mic | systemAudio | countdown)
     [[ $value == true || $value == false ]] || { echo "$key must be true or false" >&2; return 1; }
     json=$value ;;
   cameraSize)
@@ -168,7 +168,7 @@ start_recording() {
   [[ $(cfg camera) == true ]] && start_camera
   local args=(--fullscreen)
   [[ $(cfg mic) == true ]] && args+=(--with-microphone-audio)
-  [[ $(cfg desktopAudio) == true ]] && args+=(--with-desktop-audio)
+  [[ $(cfg systemAudio) == true ]] && args+=(--with-desktop-audio)
   if omarchy-capture-screenrecording "${args[@]}" && recording; then
     set_status recording
   else
@@ -226,6 +226,19 @@ unshare() {
   else
     notify -u critical "Couldn't take the clip down" "$resp"
     return 1
+  fi
+}
+
+# The opacity Hyprland gives the user's terminals (focused), so the bar panel can match it.
+# Read from a live terminal window; the last value is remembered for when none is open.
+terminal_opacity() {
+  local addr value cache="$STATE_DIR/terminal-opacity"
+  addr=$(hyprctl clients -j 2>/dev/null | jq -r 'first(.[] | select(any(.tags[]?; startswith("terminal")))) | .address // empty')
+  [[ -n $addr ]] && value=$(hyprctl getprop "address:$addr" opacity 2>/dev/null | head -1)
+  if [[ $value =~ ^[0-9]*\.?[0-9]+$ ]]; then
+    echo "$value" | tee "$cache"
+  else
+    cat "$cache" 2>/dev/null || echo 1
   fi
 }
 
@@ -324,6 +337,7 @@ delete)
   ;;
 unshare) [[ -n ${2:-} ]] || { echo "usage: omaclip unshare <id>" >&2; exit 1; }; unshare "$2" ;;
 recent) recent "${2:-10}" ;;
+terminal-opacity) terminal_opacity ;;
 status) [[ -s $STATUS ]] && cat "$STATUS" || echo '{"status":"idle"}' ;;
 config)
   case "${2:-get}" in
