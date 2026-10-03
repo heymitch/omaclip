@@ -119,10 +119,14 @@ Panel {
   }
 
   Timer {
-    interval: 1000
-    running: root.isRecording
+    interval: 250
+    running: root.isRecording || root.status === "countdown"
     repeat: true
-    onTriggered: { root.now = Date.now() / 1000; liveProc.running = true }
+    triggeredOnStart: true
+    onTriggered: {
+      root.now = Date.now() / 1000
+      if (root.isRecording && !liveProc.running) liveProc.running = true
+    }
   }
 
   // ---------- bar button ----------
@@ -134,7 +138,7 @@ Panel {
     labelVisible: false
     hasVisualContent: true
     dimmed: root.status === "idle" && !root.opened
-    tooltipText: root.isRecording ? "Stop recording" : (root.status === "uploading" ? "Uploading…" : "omaclip: record, share, settings")
+    tooltipText: root.isRecording ? "Recording " + root.elapsed() + ". Click to stop" : (root.status === "uploading" ? "Uploading…" : "omaclip: record, share, settings")
     onPressed: function() {
       if (root.isRecording) root.run(["stop"])
       else root.toggle()
@@ -142,26 +146,98 @@ Panel {
 
     Row {
       anchors.centerIn: parent
-      spacing: 5
+      spacing: 0
       leftPadding: 6
-      rightPadding: 8
+      rightPadding: 6
 
-      Text {
-        text: root.isRecording ? "●" : (root.status === "uploading" ? "󰕒" : (root.status === "countdown" ? "󰔟" : "󰑋"))
-        color: root.isRecording ? Color.urgent : Color.bar.text
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-        font.pixelSize: Style.bar.iconFont
+      // The mark: a screen with the camera bubble in its configured corner.
+      // Countdown fills the bubble in three steps; recording fills it one lap per minute.
+      Item {
+        id: mark
+        readonly property real unit: Style.bar.iconFont
+        readonly property string corner: String(root.config.cameraCorner || "bottom-left")
+        readonly property color ink: Color.bar.text
+        readonly property real dot: root.isRecording ? Math.round(unit * 0.5) : Math.round(unit * 0.36)
+        readonly property real fill: {
+          var t = Math.max(0, root.now - root.since)
+          if (root.status === "countdown") return Math.min(1, (Math.floor(t) + 1) / 3)
+          if (root.isRecording) return (t % 60) / 60 || 0.001
+          return 0
+        }
+        width: Math.round(unit * 1.35)
+        height: Math.round(unit * 1.0)
         anchors.verticalCenter: parent.verticalCenter
+
+        Rectangle {
+          id: screen
+          anchors.fill: parent
+          radius: Math.max(2, Math.round(mark.unit * 0.14))
+          color: "transparent"
+          border.width: Math.max(1, Math.round(mark.unit * 0.09))
+          border.color: mark.ink
+          opacity: root.isRecording ? 0.85 : 1
+        }
+
+        // Upload: a line sweeping along the bottom edge of the screen.
+        Rectangle {
+          visible: root.status === "uploading"
+          height: screen.border.width + 1
+          width: parent.width * 0.35
+          radius: height / 2
+          color: Color.accent
+          anchors.bottom: parent.bottom
+          SequentialAnimation on x {
+            running: root.status === "uploading"
+            loops: Animation.Infinite
+            NumberAnimation { from: 0; to: mark.width * 0.65; duration: 700; easing.type: Easing.InOutSine }
+            NumberAnimation { from: mark.width * 0.65; to: 0; duration: 700; easing.type: Easing.InOutSine }
+          }
+        }
+
+        Canvas {
+          id: bubble
+          width: mark.dot
+          height: mark.dot
+          readonly property real inset: screen.border.width + Math.max(1, Math.round(mark.unit * 0.08))
+          x: mark.corner.indexOf("left") >= 0 ? inset : mark.width - width - inset
+          y: mark.corner.indexOf("top") === 0 ? inset : mark.height - height - inset
+          readonly property color tone: root.isRecording ? Color.urgent : (root.status === "countdown" ? Color.accent : mark.ink)
+          readonly property real fill: mark.fill
+          readonly property bool solid: root.status === "idle" || root.status === "uploading"
+          onFillChanged: requestPaint()
+          onToneChanged: requestPaint()
+          onSolidChanged: requestPaint()
+          onWidthChanged: requestPaint()
+
+          SequentialAnimation on opacity {
+            running: root.isRecording
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.55; duration: 900; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+            onRunningChanged: if (!running) bubble.opacity = 1
+          }
+
+          onPaint: {
+            var ctx = getContext("2d")
+            var r = width / 2
+            ctx.reset()
+            ctx.fillStyle = tone
+            if (solid) {
+              ctx.globalAlpha = 0.75
+              ctx.beginPath(); ctx.arc(r, r, r, 0, Math.PI * 2); ctx.fill()
+              return
+            }
+            // Faint full bubble, then the elapsed share as a pie from 12 o'clock.
+            ctx.globalAlpha = 0.3
+            ctx.beginPath(); ctx.arc(r, r, r, 0, Math.PI * 2); ctx.fill()
+            ctx.globalAlpha = 1
+            ctx.beginPath(); ctx.moveTo(r, r)
+            ctx.arc(r, r, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill)
+            ctx.closePath(); ctx.fill()
+          }
+        }
       }
 
-      Text {
-        visible: root.isRecording
-        text: root.elapsed()
-        color: Color.bar.text
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-        font.pixelSize: Style.font.body
-        anchors.verticalCenter: parent.verticalCenter
-      }
     }
   }
 

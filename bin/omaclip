@@ -110,6 +110,12 @@ countdown() {
     fi
   done
   sleep 0.3
+  # Take the toast down before recording starts, so it neither lingers nor lands in the video.
+  # Omarchy's notifications hold toasts for at least 8s and ignore CloseNotification;
+  # they take dismissals by title over the shell's IPC instead.
+  omarchy-shell notifications dismiss "Recording in" >/dev/null 2>&1 ||
+    busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications \
+      org.freedesktop.Notifications CloseNotification u "$id" >/dev/null 2>&1
 }
 
 # Omarchy's recorder parks its camera bubble bottom-right, so omaclip opens the bubble

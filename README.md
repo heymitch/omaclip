@@ -9,8 +9,13 @@ copies a link like `https://clips.example.com/k3J9xQ2mPa8w/` that anyone can ope
 unfurl with a thumbnail and player in Slack, iMessage, X and anything that reads Open Graph
 or oEmbed.
 
-A bar widget shows a red dot and timer while you record, and its panel holds your recent
-links and every setting.
+The bar icon is a little screen with your camera bubble in its corner. During the countdown
+the bubble fills in three steps; while you record it turns red and fills one lap per minute
+(hover for the exact time). The icon's panel holds your recent links and every setting.
+
+Tip: Omarchy's own screen-recording indicator shows up too while you record. To keep the bar
+tidy, untick **Screen recording** in the Indicators widget's settings, or run:
+`omarchy bar set omarchy.indicators items '["Dictation","Reminder","NightLight","Dnd","StayAwake"]' --json`
 
 - No subscription, no upload limits but your disk, no third-party tracking.
 - Your videos live on your server, at your domain.
