@@ -265,6 +265,7 @@ test_server() {
 
 MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 BINDINGS="$HOME/.config/hypr/bindings.lua"
+APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 MARK_START="// >>> omaclip >>>"
 MARK_END="// <<< omaclip <<<"
 
@@ -280,10 +281,14 @@ install_omaclip() {
     block=$(
       cat <<EOF
   $MARK_START
-  "omaclip": {"icon":"󰑋","label":"Recording","description":"What to do with the recording you just made","when":"test -f $LAST"},
-  "omaclip.share": {"icon":"󰌷","label":"Share link","description":"Upload and copy a link anyone can watch; keeps the local file","action":"omaclip share"},
-  "omaclip.keep": {"icon":"󰆓","label":"Keep local only","action":"omaclip keep"},
-  "omaclip.delete": {"icon":"󰆴","label":"Delete","action":"omaclip delete"},
+  "omaclip": {"icon":"󰑋","label":"omaclip","description":"Record your screen and camera, then share a link","aliases":["record","loom"]},
+  "omaclip.share": {"icon":"󰌷","label":"Share link","description":"Upload the last recording and copy a link; keeps the local file","action":"omaclip share","when":"test -f $LAST"},
+  "omaclip.keep": {"icon":"󰆓","label":"Keep local only","action":"omaclip keep","when":"test -f $LAST"},
+  "omaclip.delete": {"icon":"󰆴","label":"Delete recording","action":"omaclip delete","when":"test -f $LAST"},
+  "omaclip.start": {"icon":"󰑋","label":"Start recording","action":"omaclip start","when":"! pgrep -f '^gpu-screen-recorder'"},
+  "omaclip.stop": {"icon":"󰓛","label":"Stop recording","action":"omaclip stop","when":"pgrep -f '^gpu-screen-recorder'"},
+  "omaclip.camera": {"icon":"󰄀","label":"Preview camera","description":"Show or hide the camera bubble where it will record","action":"omaclip camera"},
+  "omaclip.settings": {"icon":"󰒓","label":"Settings and links","description":"Recent share links and preferences","action":"omarchy-shell heymitch.omaclip open"},
   $MARK_END
 EOF
     )
@@ -295,6 +300,12 @@ end = text.rstrip().rfind("}")
 open(path, "w").write(text[:end].rstrip() + "\n\n" + block + "\n" + text[end:])
 PY
   fi
+  # A desktop entry, so app search finds omaclip by name or by "record".
+  mkdir -p "$APPS"
+  printf '%s\n' "[Desktop Entry]" "Type=Application" "Name=omaclip" "GenericName=Screen recorder" \
+    "Comment=Record your screen and camera, then share a link" "Exec=omaclip" "Icon=camera-video" \
+    "Terminal=false" "Categories=AudioVideo;Video;Recorder;" \
+    "Keywords=record;screen;recording;loom;video;camera;share;" >"$APPS/omaclip.desktop"
   if [[ -f $BINDINGS ]]; then
     printf '\n-- >>> omaclip >>>\no.bind("%s", "Record screen (again to stop and share)", "omaclip")\n-- <<< omaclip <<<\n' "$key" >>"$BINDINGS"
   fi
@@ -306,7 +317,7 @@ PY
 uninstall_omaclip() {
   [[ -f $MENU ]] && sed -i "\|$MARK_START|,\|$MARK_END|d" "$MENU"
   [[ -f $BINDINGS ]] && sed -i '/^-- >>> omaclip >>>$/,/^-- <<< omaclip <<<$/d' "$BINDINGS"
-  [[ ${1:-} == quiet ]] || { rm -f "$HOME/.local/bin/omaclip"; hyprctl reload >/dev/null 2>&1; echo "omaclip removed (settings kept in $CONFIG_DIR)."; }
+  [[ ${1:-} == quiet ]] || { rm -f "$HOME/.local/bin/omaclip" "$APPS/omaclip.desktop"; hyprctl reload >/dev/null 2>&1; echo "omaclip removed (settings kept in $CONFIG_DIR)."; }
 }
 
 # ---------- main ----------

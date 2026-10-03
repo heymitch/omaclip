@@ -104,8 +104,8 @@ omarchy plugin add https://github.com/heymitch/omaclip.git --enable
 ~/.config/omarchy/plugins/heymitch.omaclip/bin/omaclip install
 ```
 
-The first command adds the bar widget. The second puts `omaclip` on your PATH, adds the
-after-recording menu to the Omarchy menu, and binds **Super+Shift+R**. To use another key:
+The first command adds the bar widget. The second puts `omaclip` on your PATH, adds an omaclip
+section to the Omarchy menu (Super+Space) and an app entry, and binds **Super+Shift+R**. To use another key:
 `omaclip install "SUPER + SHIFT + V"`.
 
 Then open the widget's panel (the record icon in the bar), paste the three values the
@@ -126,6 +126,8 @@ omaclip test
 | **Super+Shift+R** again | Stops, then the menu: Share link / Keep local only / Delete |
 | Click the bar icon while recording | Stops, same as the shortcut |
 | Click the bar icon otherwise | Panel: Record button, recent links, settings |
+| **Super+Space** → omaclip | Start/stop recording, preview the camera, settings; share/keep/delete when a recording is waiting |
+| Search "omaclip" or "record" in Apps | Starts recording |
 | Click a recent link | Copies it |
 | Trash icon on a recent link | Takes the clip down from your server |
 
