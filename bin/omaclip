@@ -31,6 +31,7 @@ DEFAULTS='{
   "cameraDevice": "",
   "cameraSize": "medium",
   "cameraCorner": "bottom-left",
+  "cameraMirror": true,
   "mic": true,
   "desktopAudio": true,
   "countdown": true
@@ -53,7 +54,7 @@ upload_url() {
 config_set() {
   local key=$1 value=${2-} json
   case $key in
-  camera | mic | desktopAudio | countdown)
+  camera | cameraMirror | mic | desktopAudio | countdown)
     [[ $value == true || $value == false ]] || { echo "$key must be true or false" >&2; return 1; }
     json=$value ;;
   cameraSize)
@@ -131,9 +132,11 @@ start_camera() {
   for res in 640x360 1280x720 1920x1080; do
     v4l2-ctl --list-formats-ext -d "$device" 2>/dev/null | grep -q "$res" && { opts="video_size=$res,$opts"; break; }
   done
+  local filter="crop=ih*8/9:ih"
+  [[ $(cfg cameraMirror) == true ]] && filter+=",hflip"
   pkill -f "WebcamOverlay" 2>/dev/null
   mpv "av://v4l2:$device" --profile=low-latency --untimed --no-cache \
-    --demuxer-lavf-o="$opts" '--vf=lavfi=[crop=ih*8/9:ih]' \
+    --demuxer-lavf-o="$opts" "--vf=lavfi=[$filter]" \
     --title="WebcamOverlay" --wayland-app-id="WebcamOverlay-$size" \
     --no-border --no-audio --no-osc --osd-level=0 --really-quiet &>/dev/null &
   disown

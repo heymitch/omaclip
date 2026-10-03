@@ -132,6 +132,7 @@ Settings (panel or `omaclip config set <key> <value>`):
 | `cameraCorner` | `bottom-left` | `top-left`, `top-right`, `bottom-left`, `bottom-right` |
 | `cameraSize` | `medium` | `small`, `medium`, `large` |
 | `cameraDevice` | first webcam | e.g. `/dev/video2` |
+| `cameraMirror` | `true` | Flip the bubble like a mirror (the recording is flipped too) |
 | `mic` | `true` | Record your microphone |
 | `desktopAudio` | `true` | Record computer sound |
 | `countdown` | `true` | 3-2-1 with mic level before recording |

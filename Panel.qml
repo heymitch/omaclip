@@ -362,6 +362,7 @@ Panel {
       PanelSectionHeader { width: column.inner; text: "RECORDING" }
 
       Toggle { width: column.inner; label: "Camera bubble"; checked: root.config.camera === true; onClicked: root.setConfig("camera", !checked) }
+      Toggle { width: column.inner; label: "Mirror camera"; checked: root.config.cameraMirror === true; onClicked: root.setConfig("cameraMirror", !checked) }
       Toggle { width: column.inner; label: "Microphone"; checked: root.config.mic === true; onClicked: root.setConfig("mic", !checked) }
       Toggle { width: column.inner; label: "Computer audio"; checked: root.config.desktopAudio === true; onClicked: root.setConfig("desktopAudio", !checked) }
       Toggle { width: column.inner; label: "3-2-1 countdown with mic check"; checked: root.config.countdown === true; onClicked: root.setConfig("countdown", !checked) }
