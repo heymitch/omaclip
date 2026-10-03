@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "heymitch.omaclip",
+  "name": "omaclip",
+  "version": "0.1.0",
+  "author": "heymitch",
+  "license": "MIT",
+  "description": "Loom-style screen recording with a camera bubble, shared as links from your own server.",
+  "kinds": ["bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "omaclip",
+    "description": "Record your screen and camera, then share a link or keep it local",
+    "category": "Media",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}

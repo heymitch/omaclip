@@ -1,0 +1,330 @@
+#!/bin/bash
+# omaclip: Loom-style screen recording for Omarchy, shared from your own server.
+#
+#   omaclip                  start recording, or stop it and ask what to do with the video
+#   omaclip share|keep|delete   what to do with the last recording
+#   omaclip unshare <id>     take a shared clip down
+#   omaclip recent [n]       recently shared clips, as JSON
+#   omaclip countdown        just the 3-2-1 mic check
+#   omaclip camera [on|off]  preview the camera bubble where it will record
+#   omaclip config [get [key] | set <key> <value> | path]
+#   omaclip test             check the server and token
+#   omaclip install|uninstall   add/remove the menu entries and keybinding
+#
+# Settings live in ~/.config/omaclip/config.json (the bar panel edits the same file).
+
+set -uo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omaclip"
+CONFIG="$CONFIG_DIR/config.json"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omaclip"
+STATUS="$STATE_DIR/status.json"
+LAST="$STATE_DIR/last"
+CLIPS="$STATE_DIR/clips.jsonl"
+mkdir -p "$CONFIG_DIR" "$STATE_DIR"
+
+DEFAULTS='{
+  "server": "",
+  "uploadUrl": "",
+  "token": "",
+  "camera": true,
+  "cameraDevice": "",
+  "cameraSize": "medium",
+  "cameraCorner": "bottom-left",
+  "mic": true,
+  "desktopAudio": true,
+  "countdown": true
+}'
+
+# ---------- config ----------
+
+config_json() {
+  if [[ -s $CONFIG ]]; then jq -s '.[0] * .[1]' <(echo "$DEFAULTS") "$CONFIG"; else echo "$DEFAULTS"; fi
+}
+cfg() { config_json | jq -r --arg k "$1" '.[$k] | if . == null then "" else tostring end'; }
+
+upload_url() {
+  local url
+  url=$(cfg uploadUrl)
+  [[ -z $url && -n $(cfg server) ]] && url="$(cfg server | sed 's:/*$::')/api/upload"
+  echo "$url"
+}
+
+config_set() {
+  local key=$1 value=${2-} json
+  case $key in
+  camera | mic | desktopAudio | countdown)
+    [[ $value == true || $value == false ]] || { echo "$key must be true or false" >&2; return 1; }
+    json=$value ;;
+  cameraSize)
+    [[ $value =~ ^(small|medium|large)$ ]] || { echo "cameraSize must be small, medium or large" >&2; return 1; }
+    json=$(jq -n --arg v "$value" '$v') ;;
+  cameraCorner)
+    [[ $value =~ ^(top|bottom)-(left|right)$ ]] || { echo "cameraCorner must be top-left, top-right, bottom-left or bottom-right" >&2; return 1; }
+    json=$(jq -n --arg v "$value" '$v') ;;
+  server | uploadUrl | token | cameraDevice)
+    json=$(jq -n --arg v "$value" '$v') ;;
+  *)
+    echo "unknown setting: $key" >&2; return 1 ;;
+  esac
+  local current='{}'
+  [[ -s $CONFIG ]] && current=$(cat "$CONFIG")
+  jq --arg k "$key" --argjson v "$json" '.[$k] = $v' <<<"$current" >"$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
+  chmod 600 "$CONFIG"
+}
+
+# ---------- status (the bar widget watches this file) ----------
+
+set_status() {
+  jq -n --arg s "$1" --argjson t "$(date +%s)" '{status: $s, since: $t}' >"$STATUS.tmp" && mv "$STATUS.tmp" "$STATUS"
+}
+
+notify() { omarchy-notification-send --app-name omaclip "$@"; }
+recording() { pgrep -f "^gpu-screen-recorder" >/dev/null; }
+
+# ---------- recording ----------
+
+# 3-2-1 with a live mic level, so a dead or muted mic shows up before you start talking.
+countdown() {
+  local id=0 n i peak bars meter status
+  for n in 3 2 1; do
+    if [[ $(cfg mic) == true ]]; then
+      peak=$(ffmpeg -hide_banner -nostats -f pulse -i default -t 0.7 -af volumedetect -f null - 2>&1 |
+        sed -n 's/.*max_volume: \(-\?[0-9.]*\) dB.*/\1/p')
+      peak=${peak%.*}
+      peak=${peak:--91}
+      bars=$(((peak + 60) / 6))
+      ((bars < 0)) && bars=0
+      ((bars > 10)) && bars=10
+      meter=""
+      for ((i = 0; i < 10; i++)); do ((i < bars)) && meter+="▮" || meter+="▯"; done
+      if ((peak <= -85)); then status="$meter  no mic signal: check your input"; else status="$meter  mic live"; fi
+    else
+      sleep 0.7
+      status="mic off"
+    fi
+    if ((id == 0)); then
+      id=$(notify -p -t 1500 "Recording in $n" "$status")
+    else
+      notify -r "$id" -t 1100 "Recording in $n" "$status" >/dev/null
+    fi
+  done
+  sleep 0.3
+}
+
+# Omarchy's recorder parks its camera bubble bottom-right, so omaclip opens the bubble
+# itself (same mpv setup and window rules) and moves it to the configured corner.
+start_camera() {
+  local device size corner margin=40 opts="framerate=30" res client mon
+  device=$(cfg cameraDevice)
+  [[ -z $device ]] && device=$(omarchy-capture-webcam-list 2>/dev/null | sed -n '1s/[[:space:]].*//p')
+  [[ -z $device ]] && { notify -u critical -t 3000 "No webcam found" "Recording without the camera"; return 0; }
+  size=$(cfg cameraSize)
+  corner=$(cfg cameraCorner)
+
+  for res in 640x360 1280x720 1920x1080; do
+    v4l2-ctl --list-formats-ext -d "$device" 2>/dev/null | grep -q "$res" && { opts="video_size=$res,$opts"; break; }
+  done
+  pkill -f "WebcamOverlay" 2>/dev/null
+  mpv "av://v4l2:$device" --profile=low-latency --untimed --no-cache \
+    --demuxer-lavf-o="$opts" '--vf=lavfi=[crop=ih*8/9:ih]' \
+    --title="WebcamOverlay" --wayland-app-id="WebcamOverlay-$size" \
+    --no-border --no-audio --no-osc --osd-level=0 --really-quiet &>/dev/null &
+  disown
+
+  for _ in $(seq 40); do
+    client=$(hyprctl clients -j | jq -c 'first(.[] | select(.title == "WebcamOverlay")) // empty')
+    [[ -n $client ]] && break
+    sleep 0.05
+  done
+  [[ -z $client ]] && return 0
+  sleep 0.15 # let the size rule land before measuring
+  client=$(hyprctl clients -j | jq -c 'first(.[] | select(.title == "WebcamOverlay"))')
+  mon=$(hyprctl monitors -j | jq -c --argjson id "$(jq .monitor <<<"$client")" 'first(.[] | select(.id == $id))')
+
+  local w h mx my mw mh x y
+  read -r w h < <(jq -r '.size | @tsv' <<<"$client")
+  read -r mx my mw mh < <(jq -r '[.x, .y, ((.width / .scale) | floor), ((.height / .scale) | floor)] | @tsv' <<<"$mon")
+  [[ $corner == *left ]] && x=$((mx + margin)) || x=$((mx + mw - w - margin))
+  [[ $corner == top* ]] && y=$((my + margin)) || y=$((my + mh - h - margin))
+  local addr
+  addr=$(jq -r .address <<<"$client")
+  hyprctl dispatch "hl.dsp.window.move({ window = \"address:$addr\", x = $x, y = $y })" >/dev/null 2>&1 ||
+    hyprctl dispatch movewindowpixel "exact $x $y,address:$addr" >/dev/null 2>&1
+  sleep 0.4
+}
+
+start_recording() {
+  [[ $(cfg countdown) == true ]] && { set_status countdown; countdown; }
+  [[ $(cfg camera) == true ]] && start_camera
+  local args=(--fullscreen)
+  [[ $(cfg mic) == true ]] && args+=(--with-microphone-audio)
+  [[ $(cfg desktopAudio) == true ]] && args+=(--with-desktop-audio)
+  if omarchy-capture-screenrecording "${args[@]}" && recording; then
+    set_status recording
+  else
+    pkill -f "WebcamOverlay" 2>/dev/null
+    set_status idle
+  fi
+}
+
+stop_recording() {
+  local file
+  file=$(omarchy-capture-screenrecording --stop-recording | tail -1)
+  pkill -f "WebcamOverlay" 2>/dev/null
+  set_status idle
+  if [[ -f $file ]]; then
+    echo "$file" >"$LAST"
+    omarchy menu summon omaclip >/dev/null 2>&1
+  fi
+}
+
+# ---------- after recording ----------
+
+last_file() { [[ -f $LAST ]] && cat "$LAST"; }
+
+share() {
+  local file=${1:-$(last_file)} url token resp link
+  [[ -f $file ]] || { notify -u critical "No recording to share"; return 1; }
+  url=$(upload_url)
+  token=$(cfg token)
+  [[ -n $url && -n $token ]] || { notify -u critical "omaclip isn't connected to a server" "Set it up in the omaclip bar panel"; return 1; }
+
+  set_status uploading
+  notify -t 4000 "Uploading recording…" "$(du -h "$file" | cut -f1)"
+  resp=$(curl -sS --fail-with-body -H "Authorization: Bearer $token" -T "$file" "$url" 2>&1)
+  set_status idle
+  link=$(jq -r '.url // empty' <<<"$resp" 2>/dev/null)
+  if [[ -z $link ]]; then
+    notify -u critical "Upload failed" "$(jq -r '.error // empty' <<<"$resp" 2>/dev/null || echo "$resp")"
+    return 1
+  fi
+  wl-copy "$link"
+  jq -c --arg file "$file" --arg ts "$(date -Iseconds)" '{ts: $ts, id, url, thumbnail, duration, file: $file}' <<<"$resp" >>"$CLIPS"
+  [[ $file == "$(last_file)" ]] && rm -f "$LAST"
+  notify -t 10000 "Link copied" "$link" --exec xdg-open "$link"
+}
+
+unshare() {
+  local id=$1 base token resp
+  base=$(upload_url)
+  base=${base%/upload}
+  token=$(cfg token)
+  resp=$(curl -sS -X DELETE -H "Authorization: Bearer $token" "$base/clips/$id" 2>&1)
+  if jq -e '.deleted' <<<"$resp" >/dev/null 2>&1; then
+    jq -c --arg id "$id" 'select(.id != $id)' "$CLIPS" >"$CLIPS.tmp" 2>/dev/null && mv "$CLIPS.tmp" "$CLIPS"
+    notify -t 3000 "Clip taken down"
+  else
+    notify -u critical "Couldn't take the clip down" "$resp"
+    return 1
+  fi
+}
+
+recent() {
+  [[ -s $CLIPS ]] || { echo "[]"; return; }
+  tail -n "${1:-10}" "$CLIPS" | jq -s 'reverse'
+}
+
+test_server() {
+  local base token resp
+  base=$(upload_url)
+  base=${base%/upload}
+  token=$(cfg token)
+  [[ -n $base && -n $token ]] || { echo "Set server (or uploadUrl) and token first." >&2; return 1; }
+  if resp=$(curl -sS --max-time 10 -H "Authorization: Bearer $token" "$base/ping" 2>&1) && jq -e .ok <<<"$resp" >/dev/null 2>&1; then
+    echo "Connected: clips publish to $(jq -r .url <<<"$resp")"
+  else
+    echo "Can't reach the server: ${resp:-no response}" >&2
+    return 1
+  fi
+}
+
+# ---------- install ----------
+
+MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+BINDINGS="$HOME/.config/hypr/bindings.lua"
+MARK_START="// >>> omaclip >>>"
+MARK_END="// <<< omaclip <<<"
+
+install_omaclip() {
+  local key=${1:-SUPER + SHIFT + R} self
+  self=$(readlink -f "$0")
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$self" "$HOME/.local/bin/omaclip"
+
+  uninstall_omaclip quiet
+  if [[ -f $MENU ]]; then
+    local block
+    block=$(
+      cat <<EOF
+  $MARK_START
+  "omaclip": {"icon":"󰑋","label":"Recording","description":"What to do with the recording you just made","when":"test -f $LAST"},
+  "omaclip.share": {"icon":"󰌷","label":"Share link","description":"Upload and copy a link anyone can watch; keeps the local file","action":"omaclip share"},
+  "omaclip.keep": {"icon":"󰆓","label":"Keep local only","action":"omaclip keep"},
+  "omaclip.delete": {"icon":"󰆴","label":"Delete","action":"omaclip delete"},
+  $MARK_END
+EOF
+    )
+    python3 - "$MENU" "$block" <<'PY'
+import sys
+path, block = sys.argv[1], sys.argv[2]
+text = open(path).read()
+end = text.rstrip().rfind("}")
+open(path, "w").write(text[:end].rstrip() + "\n\n" + block + "\n" + text[end:])
+PY
+  fi
+  if [[ -f $BINDINGS ]]; then
+    printf '\n-- >>> omaclip >>>\no.bind("%s", "Record screen (again to stop and share)", "omaclip")\n-- <<< omaclip <<<\n' "$key" >>"$BINDINGS"
+  fi
+  echo "omaclip installed: $key records; the bar panel and 'omaclip config' hold the settings."
+}
+
+uninstall_omaclip() {
+  [[ -f $MENU ]] && sed -i "\|$MARK_START|,\|$MARK_END|d" "$MENU"
+  [[ -f $BINDINGS ]] && sed -i '/^-- >>> omaclip >>>$/,/^-- <<< omaclip <<<$/d' "$BINDINGS"
+  [[ ${1:-} == quiet ]] || { rm -f "$HOME/.local/bin/omaclip"; echo "omaclip removed (settings kept in $CONFIG_DIR)."; }
+}
+
+# ---------- main ----------
+
+case "${1:-toggle}" in
+toggle) if recording; then stop_recording; else start_recording; fi ;;
+start) recording || start_recording ;;
+stop) recording && stop_recording ;;
+countdown) countdown ;;
+camera)
+  case "${2:-toggle}" in
+  on) start_camera ;;
+  off) pkill -f "WebcamOverlay" ;;
+  *) if pgrep -f "WebcamOverlay" >/dev/null; then pkill -f "WebcamOverlay"; else start_camera; fi ;;
+  esac
+  ;;
+share) share "${2:-}" ;;
+keep)
+  file=$(last_file)
+  rm -f "$LAST"
+  notify -t 6000 "Recording kept" "$file" --exec xdg-open "$(dirname "$file")"
+  ;;
+delete)
+  file=$(last_file)
+  [[ -f $file ]] && rm -f "$file"
+  rm -f "$LAST"
+  notify -t 3000 "Recording deleted"
+  ;;
+unshare) [[ -n ${2:-} ]] || { echo "usage: omaclip unshare <id>" >&2; exit 1; }; unshare "$2" ;;
+recent) recent "${2:-10}" ;;
+status) [[ -s $STATUS ]] && cat "$STATUS" || echo '{"status":"idle"}' ;;
+config)
+  case "${2:-get}" in
+  get) if [[ -n ${3:-} ]]; then cfg "$3"; else config_json; fi ;;
+  set) config_set "${3:?key}" "${4-}" ;;
+  path) echo "$CONFIG" ;;
+  *) echo "usage: omaclip config [get [key] | set <key> <value> | path]" >&2; exit 1 ;;
+  esac
+  ;;
+test) test_server ;;
+install) install_omaclip "${2:-}" ;;
+uninstall) uninstall_omaclip ;;
+-h | --help | help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) echo "unknown command: $1 (try omaclip help)" >&2; exit 1 ;;
+esac
