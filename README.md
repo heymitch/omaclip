@@ -1,5 +1,7 @@
 # omaclip
 
+![omaclip: Loom-style screen recording for Omarchy, shared as links from your own server](assets/hero.png)
+
 Loom-style screen recording for [Omarchy](https://omarchy.org), shared from your own server.
 
 Press **Super+Shift+R**. A 3-2-1 countdown shows your mic level, then omaclip records your
@@ -13,6 +15,10 @@ The bar icon is a little screen with your camera bubble in its corner. During th
 the bubble fills in three steps; while you record it turns red and fills one lap per minute
 (hover for the exact time). The icon's panel holds your recent links and every setting, and
 its background matches the opacity Hyprland gives your terminals (the text stays solid).
+
+![The 3-2-1 countdown with mic level, and the camera bubble in the bottom-left corner](assets/desktop.png)
+
+![The bar icon in its four states: idle, countdown, recording, uploading](assets/bar-states.png)
 
 Tip: Omarchy's own screen-recording indicator shows up too while you record. To keep the bar
 tidy, untick **Screen recording** in the Indicators widget's settings, or run:
@@ -125,6 +131,8 @@ omaclip test
 
 Recordings always land in `~/Videos` first; sharing uploads a copy.
 
+<img src="assets/panel.png" alt="The omaclip panel: recent links, recording settings and server settings" width="340" align="right">
+
 Settings (panel or `omaclip config set <key> <value>`):
 
 | Key | Default | Meaning |
@@ -145,6 +153,10 @@ Settings (panel or `omaclip config set <key> <value>`):
 `omaclip countdown` runs just the mic check.
 
 ## Embedding
+
+See a live example: **https://clips.heymitch.ai/ksB0qOwcOmta/**
+
+![A clip page: the video with its title, length and a download link](assets/clip-page.png)
 
 Every clip page is `https://clips.example.com/<id>/` and contains:
 
