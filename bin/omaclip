@@ -184,7 +184,7 @@ stop_recording() {
   set_status idle
   if [[ -f $file ]]; then
     echo "$file" >"$LAST"
-    omarchy menu summon omaclip >/dev/null 2>&1
+    omarchy menu summon trigger.capture.omaclip >/dev/null 2>&1
   fi
 }
 
@@ -281,14 +281,14 @@ install_omaclip() {
     block=$(
       cat <<EOF
   $MARK_START
-  "omaclip": {"icon":"󰑋","label":"omaclip","description":"Record your screen and camera, then share a link","aliases":["record","loom"]},
-  "omaclip.share": {"icon":"󰌷","label":"Share link","description":"Upload the last recording and copy a link; keeps the local file","action":"omaclip share","when":"test -f $LAST"},
-  "omaclip.keep": {"icon":"󰆓","label":"Keep local only","action":"omaclip keep","when":"test -f $LAST"},
-  "omaclip.delete": {"icon":"󰆴","label":"Delete recording","action":"omaclip delete","when":"test -f $LAST"},
-  "omaclip.start": {"icon":"󰑋","label":"Start recording","action":"omaclip start","when":"! pgrep -f '^gpu-screen-recorder'"},
-  "omaclip.stop": {"icon":"󰓛","label":"Stop recording","action":"omaclip stop","when":"pgrep -f '^gpu-screen-recorder'"},
-  "omaclip.camera": {"icon":"󰄀","label":"Preview camera","description":"Show or hide the camera bubble where it will record","action":"omaclip camera"},
-  "omaclip.settings": {"icon":"󰒓","label":"Settings and links","description":"Recent share links and preferences","action":"omarchy-shell heymitch.omaclip open"},
+  "trigger.capture.omaclip": {"icon":"󰑋","label":"omaclip","description":"Record your screen and camera, then share a link","aliases":["omaclip","loom"]},
+  "trigger.capture.omaclip.share": {"icon":"󰌷","label":"Share link","description":"Upload the last recording and copy a link; keeps the local file","action":"omaclip share","when":"test -f $LAST"},
+  "trigger.capture.omaclip.keep": {"icon":"󰆓","label":"Keep local only","action":"omaclip keep","when":"test -f $LAST"},
+  "trigger.capture.omaclip.delete": {"icon":"󰆴","label":"Delete recording","action":"omaclip delete","when":"test -f $LAST"},
+  "trigger.capture.omaclip.start": {"icon":"󰑋","label":"Start recording","action":"omaclip start","when":"! pgrep -f '^gpu-screen-recorder'"},
+  "trigger.capture.omaclip.stop": {"icon":"󰓛","label":"Stop recording","action":"omaclip stop","when":"pgrep -f '^gpu-screen-recorder'"},
+  "trigger.capture.omaclip.camera": {"icon":"󰄀","label":"Preview camera","description":"Show or hide the camera bubble where it will record","action":"omaclip camera"},
+  "trigger.capture.omaclip.settings": {"icon":"󰒓","label":"Settings and links","description":"Recent share links and preferences","action":"omarchy-shell heymitch.omaclip open"},
   $MARK_END
 EOF
     )
