@@ -276,13 +276,15 @@ PY
   if [[ -f $BINDINGS ]]; then
     printf '\n-- >>> omaclip >>>\no.bind("%s", "Record screen (again to stop and share)", "omaclip")\n-- <<< omaclip <<<\n' "$key" >>"$BINDINGS"
   fi
+  # Hyprland auto-reloads on every save and can catch the bindings file mid-rewrite; reload once at the end.
+  hyprctl reload >/dev/null 2>&1
   echo "omaclip installed: $key records; the bar panel and 'omaclip config' hold the settings."
 }
 
 uninstall_omaclip() {
   [[ -f $MENU ]] && sed -i "\|$MARK_START|,\|$MARK_END|d" "$MENU"
   [[ -f $BINDINGS ]] && sed -i '/^-- >>> omaclip >>>$/,/^-- <<< omaclip <<<$/d' "$BINDINGS"
-  [[ ${1:-} == quiet ]] || { rm -f "$HOME/.local/bin/omaclip"; echo "omaclip removed (settings kept in $CONFIG_DIR)."; }
+  [[ ${1:-} == quiet ]] || { rm -f "$HOME/.local/bin/omaclip"; hyprctl reload >/dev/null 2>&1; echo "omaclip removed (settings kept in $CONFIG_DIR)."; }
 }
 
 # ---------- main ----------
